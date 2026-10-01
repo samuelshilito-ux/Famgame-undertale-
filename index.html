@@ -3,104 +3,268 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Undertale Battle Simulator</title>
+    <title>Undertale Pixel Simulator</title>
     <style>
         body {
             margin: 0;
             background-color: #000;
-            color: white;
-            font-family: monospace;
+            color: #fff;
+            font-family: 'Courier New', Courier, monospace;
             display: flex;
             flex-direction: column;
             align-items: center;
             justify-content: center;
             height: 100vh;
             overflow: hidden;
+            user-select: none;
+            -webkit-user-select: none;
         }
-        /* La caja de batalla clásica de Undertale */
+        #gameContainer {
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
         canvas {
             border: 4px solid #fff;
             background-color: #000;
+            max-width: 90vw;
+            max-height: 45vh;
+            /* Truco CSS para que los pixeles se vean nítidos y no borrosos */
+            image-rendering: pixelated;
+            image-rendering: crisp-edges;
         }
-        h1 { margin: 5px; font-size: 18px; letter-spacing: 2px; }
-        p { font-size: 12px; color: #aaa; }
+        h1 { 
+            margin: 5px; 
+            font-size: 18px; 
+            letter-spacing: 3px; 
+            font-weight: bold;
+        }
+        
+        /* Botón de inicio retro */
+        #startOverlay {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background-color: rgba(0, 0, 0, 0.95);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 10;
+        }
+        #startBtn {
+            background-color: #000;
+            color: #fff;
+            border: 4px solid #fff;
+            padding: 15px 30px;
+            font-size: 20px;
+            font-family: 'Courier New', Courier, monospace;
+            cursor: pointer;
+            font-weight: bold;
+            letter-spacing: 2px;
+        }
+        #startBtn:active {
+            background-color: #fff;
+            color: #000;
+        }
+
+        /* Controles táctiles estilo arcade */
+        .controls {
+            display: grid;
+            grid-template-columns: repeat(3, 80px);
+            grid-template-rows: repeat(2, 65px);
+            gap: 12px;
+            margin-top: 20px;
+        }
+        .btn {
+            background-color: #111;
+            color: white;
+            border: 3px solid #fff;
+            border-radius: 0px; /* Bordes cuadrados estilo retro */
+            font-size: 28px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            touch-action: none;
+        }
+        .btn.active-touch { background-color: #ff0000; }
+        .up { grid-column: 2; }
+        .left { grid-column: 1; grid-row: 2; }
+        .down { grid-column: 2; grid-row: 2; }
+        .right { grid-column: 3; grid-row: 2; }
     </style>
 </head>
 <body>
 
-    <h1>BAD TIME SIMULATOR</h1>
-    <canvas id="gameCanvas" width="400" height="400"></canvas>
-    <p>Muévete con las flechas del teclado o W, A, S, D</p>
+    <h1>BAD TIME MOBILE</h1>
+    
+    <div id="gameContainer">
+        <div id="startOverlay">
+            <button id="startBtn">INICIAR JUEGO</button>
+        </div>
+        <canvas id="gameCanvas" width="400" height="400"></canvas>
+    </div>
+
+    <div class="controls">
+        <div class="btn up" id="btnUp">▲</div>
+        <div class="btn left" id="btnLeft">◀</div>
+        <div class="btn down" id="btnDown">▼</div>
+        <div class="btn right" id="btnRight">▶</div>
+    </div>
 
 <script>
     const canvas = document.getElementById("gameCanvas");
     const ctx = canvas.getContext("2d");
+    const startOverlay = document.getElementById("startOverlay");
+    const startBtn = document.getElementById("startBtn");
 
-    // Configuración del Corazón (Jugador)
+    // Desactivar suavizado de imágenes en el motor gráfico para forzar pixeles puros
+    ctx.imageSmoothingEnabled = false;
+
+    // Configuración del Jugador (Tamaño ajustado para la rejilla de pixeles)
     const player = {
-        x: canvas.width / 2 - 8,
-        y: canvas.height / 2 - 8,
-        size: 16,
-        speed: 4
+        x: canvas.width / 2 - 14,
+        y: canvas.height / 2 - 12,
+        width: 28,
+        height: 24,
+        speed: 5
     };
 
-    // Control de teclas presionadas
-    const keys = {};
+    const keys = { ArrowUp: false, ArrowDown: false, ArrowLeft: false, ArrowRight: false };
+    const bones = [];
+    let spawnTimer = 0;
+    let gameStarted = false;
 
-    window.addEventListener("keydown", (e) => {
-        keys[e.key] = true;
+    // Activar juego al oprimir el botón
+    startBtn.addEventListener("click", () => { startOverlay.style.display = "none"; gameStarted = true; });
+    startBtn.addEventListener("touchstart", (e) => { e.preventDefault(); startOverlay.style.display = "none"; gameStarted = true; });
+
+    // Controles de teclado
+    window.addEventListener("keydown", (e) => { 
+        if(e.key === "w" || e.key === "W") keys["ArrowUp"] = true;
+        if(e.key === "s" || e.key === "S") keys["ArrowDown"] = true;
+        if(e.key === "a" || e.key === "A") keys["ArrowLeft"] = true;
+        if(e.key === "d" || e.key === "D") keys["ArrowRight"] = true;
+        keys[e.key] = true; 
+    });
+    window.addEventListener("keyup", (e) => { 
+        if(e.key === "w" || e.key === "W") keys["ArrowUp"] = false;
+        if(e.key === "s" || e.key === "S") keys["ArrowDown"] = false;
+        if(e.key === "a" || e.key === "A") keys["ArrowLeft"] = false;
+        if(e.key === "d" || e.key === "D") keys["ArrowRight"] = false;
+        keys[e.key] = false; 
     });
 
-    window.addEventListener("keyup", (e) => {
-        keys[e.key] = false;
-    });
+    // Controles táctiles
+    function setupTouch(id, keyName) {
+        const btn = document.getElementById(id);
+        btn.addEventListener("touchstart", (e) => { e.preventDefault(); keys[keyName] = true; btn.classList.add("active-touch"); });
+        btn.addEventListener("touchend", (e) => { e.preventDefault(); keys[keyName] = false; btn.classList.remove("active-touch"); });
+        btn.addEventListener("touchcancel", (e) => { e.preventDefault(); keys[keyName] = false; btn.classList.remove("active-touch"); });
+    }
+    setupTouch("btnUp", "ArrowUp");
+    setupTouch("btnDown", "ArrowDown");
+    setupTouch("btnLeft", "ArrowLeft");
+    setupTouch("btnRight", "ArrowRight");
 
-    // Bucle principal del juego (60 cuadros por segundo)
     function gameLoop() {
-        update();
-        draw();
+        if (gameStarted) {
+            update();
+            draw();
+        } else {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            drawPixelHeart(player.x, player.y);
+        }
         requestAnimationFrame(gameLoop);
     }
 
-    // Lógica de movimiento y colisiones con los bordes
     function update() {
-        if (keys["ArrowUp"] || keys["w"] || keys["W"]) player.y -= player.speed;
-        if (keys["ArrowDown"] || keys["s"] || keys["S"]) player.y += player.speed;
-        if (keys["ArrowLeft"] || keys["a"] || keys["A"]) player.x -= player.speed;
-        if (keys["ArrowRight"] || keys["d"] || keys["D"]) player.x += player.speed;
+        if (keys["ArrowUp"]) player.y -= player.speed;
+        if (keys["ArrowDown"]) player.y += player.speed;
+        if (keys["ArrowLeft"]) player.x -= player.speed;
+        if (keys["ArrowRight"]) player.x += player.speed;
 
-        // Evitar que el corazón se salga del recuadro blanco
         if (player.x < 0) player.x = 0;
         if (player.y < 0) player.y = 0;
-        if (player.x > canvas.width - player.size) player.x = canvas.width - player.size;
-        if (player.y > canvas.height - player.size) player.y = canvas.height - player.size;
+        if (player.x > canvas.width - player.width) player.x = canvas.width - player.width;
+        if (player.y > canvas.height - player.height) player.y = canvas.height - player.height;
+
+        spawnTimer++;
+        if (spawnTimer > 25) { 
+            bones.push({
+                x: Math.random() * (canvas.width - 20),
+                y: -60,
+                width: 16,
+                height: 60,
+                speed: 4
+            });
+            spawnTimer = 0;
+        }
+
+        for (let i = bones.length - 1; i >= 0; i--) {
+            bones[i].y += bones[i].speed;
+
+            // Detección de golpes (Hitbox)
+            if (player.x < bones[i].x + bones[i].width &&
+                player.x + player.width > bones[i].x &&
+                player.y < bones[i].y + bones[i].height &&
+                player.y + player.height > bones[i].y) {
+                
+                player.x = canvas.width / 2 - 14;
+                player.y = canvas.height / 2 - 12;
+                bones.length = 0;
+                break;
+            }
+
+            if (bones[i].y > canvas.height) {
+                bones.splice(i, 1);
+            }
+        }
     }
 
-    // Dibujar el corazón de Undertale
-    function drawPlayer(x, y, size) {
-        ctx.fillStyle = "#ff0000"; // Rojo Undertale
-        ctx.beginPath();
-        // Dibujo aproximado de un corazón usando arcos y líneas
-        ctx.moveTo(x + size / 2, y + size / 4);
-        ctx.bezierCurveTo(x + size / 2, y, x, y, x, y + size / 2);
-        ctx.bezierCurveTo(x, y + (size * 3) / 4, x + size / 2, y + size, x + size / 2, y + size);
-        ctx.bezierCurveTo(x + size / 2, y + size, x + size, y + (size * 3) / 4, x + size, y + size / 2);
-        ctx.bezierCurveTo(x + size, y, x + size / 2, y, x + size / 2, y + size / 4);
-        ctx.closePath();
-        ctx.fill();
+    // MAPA DE PIXELES DEL CORAZÓN ORIGINAL DE UNDERTALE (Matriz de 14x12 bloques escalados)
+    const heartMatrix = [,
+ ,
+ ,
+ ,
+ ,
+ ,
+ ,
+ ,
+ ,
+ ,
+ ,
+        [0,0,0,0,0,0,1,1,0,0,0,0,0,0]
+    ];
+
+    function drawPixelHeart(startX, startY) {
+        ctx.fillStyle = "#ff0000"; // Rojo Alma de Undertale
+        const pixelSize = 2; // Tamaño de cada "píxel" interno
+
+        for (let row = 0; row < heartMatrix.length; row++) {
+            for (let col = 0; col < heartMatrix[row].length; col++) {
+                if (heartMatrix[row][col] === 1) {
+                    ctx.fillRect(startX + (col * pixelSize), startY + (row * pixelSize), pixelSize, pixelSize);
+                }
+            }
+        }
     }
 
-    // Renderizar la pantalla
     function draw() {
-        // Limpiar lienzo anterior
         ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-        // Dibujar el corazón en su posición actual
-        drawPlayer(player.x, player.y, player.size);
+        // Dibujar Huesos con esquinas totalmente rectas (estilo bloque de pixeles)
+        ctx.fillStyle = "#ffffff";
+        bones.forEach(bone => {
+            ctx.fillRect(bone.x, bone.y, bone.width, bone.height);
+        });
+
+        // Dibujar el corazón de Undertale pixel art
+        drawPixelHeart(player.x, player.y);
     }
 
-    // Arrancar el motor del juego
     gameLoop();
 </script>
 </body>
 </html>
+
